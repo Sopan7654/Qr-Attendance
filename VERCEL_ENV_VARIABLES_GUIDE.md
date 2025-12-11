@@ -204,13 +204,14 @@ admin@123
 **FIREBASE_SERVICE_ACCOUNT:**
 
 ```
-{"type":"service_account","project_id":"YOUR_PROJECT_ID","private_key_id":"YOUR_PRIVATE_KEY_ID","private_key":"-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----\n","client_email":"YOUR_SERVICE_ACCOUNT_EMAIL","client_id":"YOUR_CLIENT_ID","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"YOUR_CERT_URL","universe_domain":"googleapis.com"}
+{"type":"service_account","project_id":"YOUR_PROJECT_ID","private_key_id":"YOUR_PRIVATE_KEY_ID","private_key":"YOUR_PRIVATE_KEY_HERE","client_email":"YOUR_SERVICE_ACCOUNT_EMAIL","client_id":"YOUR_CLIENT_ID","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"YOUR_CERT_URL","universe_domain":"googleapis.com"}
 ```
 
 **NODE_ENV:**
-
 ```
+
 production
+
 ```
 
 ---
@@ -220,7 +221,6 @@ production
 ### Step 1: Verify All Variables
 
 Check that you have exactly 4 variables:
-
 - ✅ ADMIN_PASSWORD
 - ✅ SITE_URL
 - ✅ FIREBASE_SERVICE_ACCOUNT
@@ -229,7 +229,6 @@ Check that you have exactly 4 variables:
 ### Step 2: Deploy/Redeploy
 
 1. **If deploying for the first time:**
-
    - Go back to "Deployments" tab
    - Click "Deploy" (if not already deployed)
 
@@ -258,7 +257,6 @@ Check that you have exactly 4 variables:
 ### Issue: Can't find Environment Variables section
 
 **Solution:**
-
 - Make sure you're in the **Settings** tab
 - Look in the left sidebar menu
 - It might be under "General" → scroll down
@@ -266,7 +264,6 @@ Check that you have exactly 4 variables:
 ### Issue: FIREBASE_SERVICE_ACCOUNT value is too long
 
 **Solution:**
-
 - Vercel supports long values
 - Use the textarea (multi-line input) if available
 - Make sure it's all on one line (no actual line breaks)
@@ -275,7 +272,6 @@ Check that you have exactly 4 variables:
 ### Issue: Variables not working after deployment
 
 **Solution:**
-
 - Make sure you checked the correct environments (Production, Preview, Development)
 - Redeploy after adding/updating variables
 - Check deployment logs for errors
@@ -283,7 +279,6 @@ Check that you have exactly 4 variables:
 ### Issue: Can't edit a variable
 
 **Solution:**
-
 - Click on the variable row
 - Or look for "Edit" button/pencil icon
 - Some Vercel interfaces show variables in a modal
@@ -307,7 +302,6 @@ After adding all variables, verify:
 ## Need Help?
 
 If you encounter any issues:
-
 1. Check Vercel deployment logs
 2. Verify variable names are exact (case-sensitive)
 3. Make sure you redeployed after adding variables
@@ -317,13 +311,15 @@ If you encounter any issues:
 
 ## Quick Reference: Variable Summary
 
-| Variable Name            | Value                      | Environments                           |
-| ------------------------ | -------------------------- | -------------------------------------- |
-| ADMIN_PASSWORD           | `admin@123`                | All (Production, Preview, Development) |
-| SITE_URL                 | (empty or your Vercel URL) | All                                    |
-| FIREBASE_SERVICE_ACCOUNT | (long JSON string)         | All                                    |
-| NODE_ENV                 | `production`               | Production only                        |
+| Variable Name | Value | Environments |
+|--------------|-------|--------------|
+| ADMIN_PASSWORD | `admin@123` | All (Production, Preview, Development) |
+| SITE_URL | (empty or your Vercel URL) | All |
+| FIREBASE_SERVICE_ACCOUNT | (long JSON string) | All |
+| NODE_ENV | `production` | Production only |
 
 ---
 
 **That's it!** Once all variables are added and you've redeployed, your app should work on Vercel! 🚀
+
+```

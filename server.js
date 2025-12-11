@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const admin = require('firebase-admin');
 const ExcelJS = require('exceljs');
 const QRCode = require('qrcode');
+const PDFDocument = require('pdfkit');
 const net = require('net');
 const os = require('os');
 
@@ -130,9 +131,107 @@ const requireAdmin = (req, res, next) => {
 
 const normalizeString = (value) => (value || '').trim();
 
+const getTodayLocalString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getActiveMeeting = async () => {
+  const activeRef = db.ref('activeMeeting');
+  const activeSnap = await activeRef.once('value');
+  const active = activeSnap.val();
+  if (!active || !active.meetingId) return null;
+
+  const meetingSnap = await db.ref(`meetings/${active.meetingId}`).once('value');
+  if (!meetingSnap.exists()) return null;
+  const meeting = meetingSnap.val();
+  if (meeting.status !== 'active') return null;
+
+  return { id: active.meetingId, ...meeting };
+};
+
 // Routes
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Get active meeting
+app.get('/api/meeting/active', async (_req, res) => {
+  try {
+    const meeting = await getActiveMeeting();
+    if (!meeting) {
+      return res.json({ active: false });
+    }
+    return res.json({ active: true, meeting });
+  } catch (err) {
+    console.error('Active meeting error:', err);
+    res.status(500).json({ message: 'Could not fetch active meeting.' });
+  }
+});
+
+// Start a meeting (admin)
+app.post('/api/meeting/start', requireAdmin, async (req, res) => {
+  try {
+    const title = normalizeString(req.body.title);
+    const venue = normalizeString(req.body.venue);
+    const time = normalizeString(req.body.time);
+
+    if (!title || !venue || !time) {
+      return res.status(400).json({ message: 'Title, venue, and time are required.' });
+    }
+
+    // Ensure no active meeting is running
+    const existing = await getActiveMeeting();
+    if (existing) {
+      return res.status(409).json({ message: 'A meeting is already active. End it before starting a new one.' });
+    }
+
+    const dateStr = getTodayLocalString();
+    const meetingData = {
+      title,
+      venue,
+      time,
+      status: 'active',
+      date: dateStr,
+      startTimestamp: admin.database.ServerValue.TIMESTAMP
+    };
+
+    const meetingsRef = db.ref('meetings');
+    const newMeetingRef = meetingsRef.push();
+    await newMeetingRef.set(meetingData);
+
+    // Set active meeting pointer
+    await db.ref('activeMeeting').set({ meetingId: newMeetingRef.key });
+
+    res.json({ message: 'Meeting started', meetingId: newMeetingRef.key, meeting: { id: newMeetingRef.key, ...meetingData } });
+  } catch (err) {
+    console.error('Start meeting error:', err);
+    res.status(500).json({ message: 'Could not start meeting.' });
+  }
+});
+
+// End meeting (admin)
+app.post('/api/meeting/end', requireAdmin, async (_req, res) => {
+  try {
+    const meeting = await getActiveMeeting();
+    if (!meeting) {
+      return res.status(404).json({ message: 'No active meeting to end.' });
+    }
+
+    await db.ref(`meetings/${meeting.id}`).update({
+      status: 'ended',
+      endTimestamp: admin.database.ServerValue.TIMESTAMP
+    });
+    await db.ref('activeMeeting').set(null);
+
+    res.json({ message: 'Meeting ended', meetingId: meeting.id });
+  } catch (err) {
+    console.error('End meeting error:', err);
+    res.status(500).json({ message: 'Could not end meeting.' });
+  }
 });
 
 // Test Firebase connection
@@ -251,6 +350,7 @@ app.post('/api/attendance', async (req, res) => {
   try {
     const mobile = normalizeString(req.body.mobile);
     const participantId = req.body.participantId;
+    const meetingIdFromReq = normalizeString(req.body.meetingId || req.query.meetingId);
 
     if (!mobile && !participantId) {
       return res.status(400).json({ message: 'Mobile number or participant ID is required.' });
@@ -276,19 +376,29 @@ app.post('/api/attendance', async (req, res) => {
       participant = { id: participantEntry[0], ...participantEntry[1] };
     }
 
-    // Check if attendance already marked today (using local date, not UTC)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
+    // Resolve meeting
+    let meeting = null;
+    if (meetingIdFromReq) {
+      const mSnap = await db.ref(`meetings/${meetingIdFromReq}`).once('value');
+      if (mSnap.exists() && mSnap.val().status === 'active') {
+        meeting = { id: meetingIdFromReq, ...mSnap.val() };
+      }
+    }
+    if (!meeting) {
+      meeting = await getActiveMeeting();
+    }
+    if (!meeting) {
+      return res.status(404).json({ message: 'No active meeting. Please start a meeting first.' });
+    }
+
+    const todayStr = meeting.date || getTodayLocalString();
 
     const attendanceRef = db.ref('attendance');
     const allAttendanceSnapshot = await attendanceRef.once('value');
     const allAttendance = allAttendanceSnapshot.val() || {};
     
     const todayAttendance = Object.values(allAttendance).find(att => {
-      return att.participantId === participant.id && att.date === todayStr;
+      return att.participantId === participant.id && att.meetingId === meeting.id;
     });
 
     if (todayAttendance) {
@@ -305,6 +415,10 @@ app.post('/api/attendance', async (req, res) => {
       participantMobile: participant.mobile,
       participantEmail: participant.email || '',
       participantDepartment: participant.department || '',
+      meetingId: meeting.id,
+      meetingTitle: meeting.title,
+      meetingVenue: meeting.venue,
+      meetingTime: meeting.time,
       date: todayStr,
       timestamp: admin.database.ServerValue.TIMESTAMP
     };
@@ -320,6 +434,13 @@ app.post('/api/attendance', async (req, res) => {
         mobile: participant.mobile,
         email: participant.email,
         department: participant.department
+      },
+      meeting: {
+        id: meeting.id,
+        title: meeting.title,
+        venue: meeting.venue,
+        time: meeting.time,
+        date: todayStr
       }
     });
   } catch (err) {
@@ -331,18 +452,16 @@ app.post('/api/attendance', async (req, res) => {
 // Get live attendance (for admin home) - only today's entries
 app.get('/api/attendance/live', requireAdmin, async (_req, res) => {
   try {
-    // Get today's date in local timezone (YYYY-MM-DD format)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
+    const activeMeeting = await getActiveMeeting();
+    if (!activeMeeting) {
+      return res.json([]);
+    }
 
     const attendanceRef = db.ref('attendance');
     const snapshot = await attendanceRef.once('value');
     const allAttendance = snapshot.val() || {};
 
-    // Filter only today's attendance and sort by timestamp
+    // Filter only active meeting's attendance and sort by timestamp
     const attendance = Object.entries(allAttendance)
       .map(([id, data]) => {
         const ts = typeof data.timestamp === 'number' ? data.timestamp : Date.now();
@@ -352,7 +471,7 @@ app.get('/api/attendance/live', requireAdmin, async (_req, res) => {
           timestamp: ts
         };
       })
-      .filter(att => att.date === todayStr) // Only today's entries
+      .filter(att => att.meetingId === activeMeeting.id) // Only current meeting entries
       .sort((a, b) => b.timestamp - a.timestamp); // Latest first
 
     res.json(attendance);
@@ -366,6 +485,7 @@ app.get('/api/attendance/live', requireAdmin, async (_req, res) => {
 app.get('/api/attendance/date/:date', requireAdmin, async (req, res) => {
   try {
     const { date } = req.params;
+    const meetingIdFilter = normalizeString(req.query.meetingId);
     const attendanceRef = db.ref('attendance');
     const snapshot = await attendanceRef.once('value');
     const allAttendance = snapshot.val() || {};
@@ -379,7 +499,7 @@ app.get('/api/attendance/date/:date', requireAdmin, async (req, res) => {
           timestamp: ts
         };
       })
-      .filter(att => att.date === date)
+      .filter(att => att.date === date && (!meetingIdFilter || att.meetingId === meetingIdFilter))
       .sort((a, b) => b.timestamp - a.timestamp);
 
     res.json(attendance);
@@ -389,10 +509,12 @@ app.get('/api/attendance/date/:date', requireAdmin, async (req, res) => {
   }
 });
 
-// Export attendance to Excel
+// Export attendance to Excel or PDF
 app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
   try {
     const { date } = req.params;
+    const format = (req.query.format || 'excel').toLowerCase();
+    const meetingIdFilter = normalizeString(req.query.meetingId);
     const attendanceRef = db.ref('attendance');
     const snapshot = await attendanceRef.once('value');
     const allAttendance = snapshot.val() || {};
@@ -400,7 +522,7 @@ app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
     // Filter all attendance records for the specified date (exact match)
     const filteredAttendance = Object.entries(allAttendance)
       .map(([id, data]) => ({ id, ...data }))
-      .filter(att => att.date === date) // Exact date match
+      .filter(att => att.date === date && (!meetingIdFilter || att.meetingId === meetingIdFilter)) // Exact date match and optional meeting filter
       .sort((a, b) => {
         const tsA = typeof a.timestamp === 'number' ? a.timestamp : (a.timestamp ? Date.parse(a.timestamp) : 0);
         const tsB = typeof b.timestamp === 'number' ? b.timestamp : (b.timestamp ? Date.parse(b.timestamp) : 0);
@@ -415,41 +537,96 @@ app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
         email: data.participantEmail || '',
         mobile: data.participantMobile || '',
         department: data.participantDepartment || '',
+        meetingTitle: data.meetingTitle || '',
+        meetingVenue: data.meetingVenue || '',
+        meetingTime: data.meetingTime || '',
+        meetingId: data.meetingId || '',
         timestamp: new Date(ts).toLocaleString(),
         date: data.date || date,
         participantId: data.participantId || ''
       };
     });
 
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Attendance');
+    if (format === 'pdf') {
+      const doc = new PDFDocument({ margin: 30, size: 'A4' });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="attendance-${date}.pdf"`);
 
-    // Add header row with styling
-    sheet.columns = [
-      { header: 'Name', key: 'fullName', width: 25 },
-      { header: 'Email', key: 'email', width: 30 },
-      { header: 'Mobile', key: 'mobile', width: 15 },
-      { header: 'Department', key: 'department', width: 20 },
-      { header: 'Date', key: 'date', width: 15 },
-      { header: 'Attendance Time', key: 'timestamp', width: 25 }
-    ];
+      // Header
+      doc.fontSize(16).text(`Attendance - ${date}`, { align: 'center' });
+      if (rows.length) {
+        doc.moveDown(0.5).fontSize(12).text(`Meeting: ${rows[0].meetingTitle || ''}`);
+        doc.text(`Venue: ${rows[0].meetingVenue || ''}`);
+        doc.text(`Time: ${rows[0].meetingTime || ''}`);
+        doc.text(`Date: ${rows[0].date || ''}`);
+      }
+      doc.moveDown(0.5);
 
-    // Style header row
-    sheet.getRow(1).font = { bold: true };
-    sheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFE0E0E0' }
-    };
+      // Simple table rendering
+      const colWidths = [120, 140, 80, 120, 140];
+      const headers = ['Name', 'Email', 'Mobile', 'Department / Office / Institution Name', 'Date/Time'];
 
-    // Add all rows
-    rows.forEach((row) => sheet.addRow(row));
+      // Header row
+      doc.fontSize(10).font('Helvetica-Bold');
+      headers.forEach((h, i) => {
+        doc.text(h, { continued: i !== headers.length - 1, width: colWidths[i] });
+      });
+      doc.moveDown(0.2);
+      doc.moveTo(doc.x, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke();
+      doc.moveDown(0.2);
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="attendance-${date}.xlsx"`);
+      // Data rows
+      doc.fontSize(9).font('Helvetica');
+      rows.forEach(r => {
+        const cols = [
+          r.fullName || '',
+          r.email || '',
+          r.mobile || '',
+          r.department || '',
+          `${r.date || ''} ${r.timestamp || ''}`
+        ];
+        cols.forEach((c, i) => {
+          doc.text(c, { continued: i !== cols.length - 1, width: colWidths[i] });
+        });
+        doc.moveDown(0.1);
+      });
 
-    await workbook.xlsx.write(res);
-    res.end();
+      doc.end();
+      doc.pipe(res);
+    } else {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Attendance');
+
+      // Add header row with styling
+      sheet.columns = [
+        { header: 'Name', key: 'fullName', width: 25 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Mobile', key: 'mobile', width: 15 },
+        { header: 'Department', key: 'department', width: 20 },
+        { header: 'Meeting Title', key: 'meetingTitle', width: 25 },
+        { header: 'Venue', key: 'meetingVenue', width: 20 },
+        { header: 'Time', key: 'meetingTime', width: 15 },
+        { header: 'Date', key: 'date', width: 15 },
+        { header: 'Attendance Time', key: 'timestamp', width: 25 }
+      ];
+
+      // Style header row
+      sheet.getRow(1).font = { bold: true };
+      sheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
+
+      // Add all rows
+      rows.forEach((row) => sheet.addRow(row));
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="attendance-${date}.xlsx"`);
+
+      await workbook.xlsx.write(res);
+      res.end();
+    }
   } catch (err) {
     console.error('Export error:', err);
     res.status(500).json({ message: 'Could not export attendance.' });
@@ -463,6 +640,11 @@ let localIP = 'localhost';
 
 app.get('/api/qr', async (req, res) => {
   try {
+    const activeMeeting = await getActiveMeeting();
+    if (!activeMeeting) {
+      return res.status(404).json({ message: 'No active meeting. Start a meeting to generate QR.' });
+    }
+
     // Use SITE_URL from env if available (for Vercel), otherwise use local network IP
     let siteUrl;
     if (process.env.SITE_URL || process.env.VERCEL_URL) {
@@ -474,7 +656,7 @@ app.get('/api/qr', async (req, res) => {
         ? `http://${networkIP}:${port}` 
         : `http://localhost:${port}`;
     }
-    const attendanceUrl = `${siteUrl.replace(/\/$/, '')}/attendance`;
+    const attendanceUrl = `${siteUrl.replace(/\/$/, '')}/attendance?meetingId=${encodeURIComponent(activeMeeting.id)}`;
     
     const buffer = await QRCode.toBuffer(attendanceUrl, { type: 'png', width: 400 });
     res.setHeader('Content-Type', 'image/png');
