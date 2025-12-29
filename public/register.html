@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register Participant</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/">Home</a>
+      <a href="/attendance.html">Attendance</a>
+      <a href="/admin.html">Admin</a>
+    </div>
+
+    <div class="card">
+      <h2>Register Participant</h2>
+      <p class="muted">Organizer-only form. Mobile number must be unique.</p>
+      <form id="registerForm" class="grid grid-2" autocomplete="off">
+        <div class="field">
+          <label for="fullName">Full Name *</label>
+          <input id="fullName" name="fullName" required />
+        </div>
+        <div class="field">
+          <label for="mobile">Mobile Number *</label>
+          <input id="mobile" name="mobile" required />
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" />
+        </div>
+        <div class="field">
+          <label for="department">Department / Office / Institution Name</label>
+          <input id="department" name="department" />
+        </div>
+        <div class="field">
+          <label for="employeeId">Employee / Student ID (optional)</label>
+          <input id="employeeId" name="employeeId" />
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button type="submit">Save Registration</button>
+        </div>
+      </form>
+      <div id="status" class="status" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('registerForm');
+    const statusEl = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusEl.style.display = 'none';
+      const data = Object.fromEntries(new FormData(form).entries());
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.message || 'Registration failed');
+
+        form.reset();
+        statusEl.textContent = body.message;
+        statusEl.className = 'status success';
+      } catch (err) {
+        statusEl.textContent = err.message;
+        statusEl.className = 'status error';
+      }
+      statusEl.style.display = 'block';
+    });
+  </script>
+</body>
+</html>
+
+

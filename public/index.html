@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Attendance System</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+  <div class="container">
+    <div class="card hero" style="margin-top: 40px;">
+      <div>
+        <div
+          style="text-align: center; margin-bottom: 24px; padding: 16px; background: var(--panel); border-radius: 8px;">
+          <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);" id="currentDateTime"></div>
+          <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 4px;" id="currentDate"></div>
+        </div>
+        <h1>QR-Based Attendance System</h1>
+        <p class="muted">Simple and efficient attendance tracking for meetings and events. Scan the QR code to mark your
+          attendance.</p>
+        <div class="actions" style="margin-top: 16px; flex-direction: column; align-items: flex-start; gap: 16px;">
+          <div class="card" style="padding: 16px; width: 100%; background: var(--panel);">
+            <h3 style="margin-top: 0;">Start Meeting</h3>
+            <div class="grid grid-2">
+              <div class="field">
+                <label for="meetingTitle">Meeting Title</label>
+                <input id="meetingTitle" placeholder="e.g., Project Sync" />
+              </div>
+              <div class="field">
+                <label for="meetingVenue">Venue</label>
+                <input id="meetingVenue" placeholder="e.g., Conference Room" />
+              </div>
+              <div class="field">
+                <label for="meetingDateDisplay">Meeting Date</label>
+                <div class="custom-date-input" id="meetingDateDisplay">
+                  <span id="meetingDateText">Click to select date</span>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                </div>
+              </div>
+              <div class="field">
+                <label for="meetingTimeDisplay">Meeting Time</label>
+                <div class="custom-time-input" id="meetingTimeDisplay">
+                  <span id="meetingTimeText">Click to select time</span>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                </div>
+              </div>
+              <div class="field">
+                <label for="adminKeyHome">Admin Password</label>
+                <input id="adminKeyHome" type="password" placeholder="admin@123" />
+              </div>
+            </div>
+            <div class="actions" style="margin-top: 12px;">
+              <button id="startMeetingBtn" disabled>Start Meeting</button>
+              <button id="endMeetingBtn" class="btn-secondary" style="display:none;">End Meeting</button>
+            </div>
+            <div id="meetingStatus" class="status" style="display:none;"></div>
+            <div id="activeMeetingInfo" style="margin-top: 12px; color: var(--text-muted);"></div>
+          </div>
+          <div class="actions" style="gap: 12px;">
+            <a class="btn" href="/attendance">Mark Attendance</a>
+            <a class="btn btn-secondary" href="/admin">Admin Dashboard</a>
+          </div>
+        </div>
+      </div>
+      <div class="qr-box">
+        <img id="qrImage" alt="Attendance QR" style="max-width: 250px; width: 100%;" />
+        <div style="margin-top: 16px; text-align: center;">
+          <a id="downloadQrLink" href="/api/qr?download=1" download class="btn btn-secondary"
+            style="font-size: 0.875rem; padding: 8px 16px;">Download QR</a>
+        </div>
+        <div id="qrStatus" class="status" style="margin-top: 12px; display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Custom Calendar Modal -->
+    <div id="calendarModal" class="modal-overlay">
+      <div class="modal-content calendar-modal">
+        <div class="modal-header">
+          <h3>Select Date</h3>
+          <button class="close-btn" id="closeCalendar" aria-label="Close calendar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="calendar-controls">
+          <button class="nav-btn" id="prevMonth">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <div class="month-year" id="monthYear"></div>
+          <button class="nav-btn" id="nextMonth">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="todayBtn">Today</button>
+          <button class="btn-primary" id="confirmDate">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Time Picker Modal -->
+    <div id="timeModal" class="modal-overlay">
+      <div class="modal-content time-modal">
+        <div class="modal-header">
+          <h3>Select Time</h3>
+          <button class="close-btn" id="closeTime" aria-label="Close time picker">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="time-picker">
+          <div class="time-column">
+            <label>Hour</label>
+            <div class="time-scroll" id="hourScroll"></div>
+          </div>
+          <div class="time-separator">:</div>
+          <div class="time-column">
+            <label>Minute</label>
+            <div class="time-scroll" id="minuteScroll"></div>
+          </div>
+          <div class="time-column">
+            <label>Period</label>
+            <div class="time-scroll" id="periodScroll"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="nowBtn">Now</button>
+          <button class="btn-primary" id="confirmTime">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Real-time date and time display
+    const updateDateTime = () => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      const dateTimeEl = document.getElementById('currentDateTime');
+      const dateEl = document.getElementById('currentDate');
+
+      if (dateTimeEl) dateTimeEl.textContent = timeStr;
+      if (dateEl) dateEl.textContent = dateStr;
+    };
+
+    // Update date/time immediately and then every second
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
+    const qrImg = document.getElementById('qrImage');
+    const qrStatus = document.getElementById('qrStatus');
+    const meetingStatus = document.getElementById('meetingStatus');
+    const activeMeetingInfo = document.getElementById('activeMeetingInfo');
+    const startBtn = document.getElementById('startMeetingBtn');
+    const endBtn = document.getElementById('endMeetingBtn');
+    const titleInput = document.getElementById('meetingTitle');
+    const venueInput = document.getElementById('meetingVenue');
+    const adminKeyInput = document.getElementById('adminKeyHome');
+    const downloadQrLink = document.getElementById('downloadQrLink');
+
+    // Custom Date-Time Picker Variables
+    let selectedMeetingDate = null;
+    let selectedMeetingTime = { hour: 12, minute: 0, period: 'AM' };
+    let currentMonth = new Date().getMonth();
+    let currentYear = new Date().getFullYear();
+    let tempSelectedDate = null;
+
+    // Modal Elements
+    const calendarModal = document.getElementById('calendarModal');
+    const timeModal = document.getElementById('timeModal');
+    const meetingDateDisplay = document.getElementById('meetingDateDisplay');
+    const meetingTimeDisplay = document.getElementById('meetingTimeDisplay');
+    const meetingDateText = document.getElementById('meetingDateText');
+    const meetingTimeText = document.getElementById('meetingTimeText');
+
+    // Calendar Functions
+    const formatDateDisplay = (date) => {
+      if (!date) return 'Click to select date';
+      const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+      return date.toLocaleDateString('en-US', options);
+    };
+
+    const formatTimeDisplay = (time) => {
+      const hour = String(time.hour).padStart(2, '0');
+      const minute = String(time.minute).padStart(2, '0');
+      return `${hour}:${minute} ${time.period}`;
+    };
+
+    const renderCalendar = () => {
+      const monthYear = document.getElementById('monthYear');
+      const calendarGrid = document.getElementById('calendarGrid');
+
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0);
+      const prevLastDay = new Date(currentYear, currentMonth, 0);
+
+      const firstDayIndex = firstDay.getDay();
+      const lastDate = lastDay.getDate();
+      const prevLastDate = prevLastDay.getDate();
+
+      monthYear.textContent = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      let days = '';
+
+      // Day headers
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      dayNames.forEach(day => {
+        days += `<div class="calendar-day-header">${day}</div>`;
+      });
+
+      // Previous month days
+      for (let x = firstDayIndex; x > 0; x--) {
+        days += `<div class="calendar-day prev-month">${prevLastDate - x + 1}</div>`;
+      }
+
+      // Current month days
+      const today = new Date();
+      for (let i = 1; i <= lastDate; i++) {
+        const date = new Date(currentYear, currentMonth, i);
+        const isToday = date.toDateString() === today.toDateString();
+        const isSelected = tempSelectedDate && date.toDateString() === tempSelectedDate.toDateString();
+
+        let classes = 'calendar-day';
+        if (isToday) classes += ' today';
+        if (isSelected) classes += ' selected';
+
+        days += `<div class="${classes}" data-date="${date.toISOString()}">${i}</div>`;
+      }
+
+      // Next month days
+      const totalCells = firstDayIndex + lastDate;
+      const remainingCells = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+      for (let j = 1; j <= remainingCells; j++) {
+        days += `<div class="calendar-day next-month">${j}</div>`;
+      }
+
+      calendarGrid.innerHTML = days;
+
+      // Add click handlers to current month days
+      document.querySelectorAll('.calendar-day:not(.prev-month):not(.next-month)').forEach(day => {
+        day.addEventListener('click', () => {
+          document.querySelectorAll('.calendar-day').forEach(d => d.classList.remove('selected'));
+          day.classList.add('selected');
+          tempSelectedDate = new Date(day.dataset.date);
+        });
+      });
+    };
+
+    const renderTimePicker = () => {
+      const hourScroll = document.getElementById('hourScroll');
+      const minuteScroll = document.getElementById('minuteScroll');
+      const periodScroll = document.getElementById('periodScroll');
+
+      // Hours (1-12)
+      let hoursHTML = '';
+      for (let i = 1; i <= 12; i++) {
+        const isSelected = i === selectedMeetingTime.hour;
+        hoursHTML += `<div class="time-option ${isSelected ? 'selected' : ''}" data-value="${i}">${String(i).padStart(2, '0')}</div>`;
+      }
+      hourScroll.innerHTML = hoursHTML;
+
+      // Minutes (0-59, step 5)
+      let minutesHTML = '';
+      for (let i = 0; i < 60; i += 5) {
+        const isSelected = i === selectedMeetingTime.minute;
+        minutesHTML += `<div class="time-option ${isSelected ? 'selected' : ''}" data-value="${i}">${String(i).padStart(2, '0')}</div>`;
+      }
+      minuteScroll.innerHTML = minutesHTML;
+
+      // Period (AM/PM)
+      periodScroll.innerHTML = `
+        <div class="time-option ${selectedMeetingTime.period === 'AM' ? 'selected' : ''}" data-value="AM">AM</div>
+        <div class="time-option ${selectedMeetingTime.period === 'PM' ? 'selected' : ''}" data-value="PM">PM</div>
+      `;
+
+      // Add click handlers
+      hourScroll.querySelectorAll('.time-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          hourScroll.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          selectedMeetingTime.hour = parseInt(opt.dataset.value);
+        });
+      });
+
+      minuteScroll.querySelectorAll('.time-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          minuteScroll.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          selectedMeetingTime.minute = parseInt(opt.dataset.value);
+        });
+      });
+
+      periodScroll.querySelectorAll('.time-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          periodScroll.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          selectedMeetingTime.period = opt.dataset.value;
+        });
+      });
+    };
+
+    // Open/Close Modals
+    meetingDateDisplay.addEventListener('click', () => {
+      tempSelectedDate = selectedMeetingDate || new Date();
+      currentMonth = tempSelectedDate.getMonth();
+      currentYear = tempSelectedDate.getFullYear();
+      renderCalendar();
+      calendarModal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    });
+
+    meetingTimeDisplay.addEventListener('click', () => {
+      renderTimePicker();
+      timeModal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    });
+
+    const closeCalendarModal = () => {
+      calendarModal.classList.remove('active');
+      document.body.style.overflow = '';
+    };
+
+    const closeTimeModal = () => {
+      timeModal.classList.remove('active');
+      document.body.style.overflow = '';
+    };
+
+    document.getElementById('closeCalendar').addEventListener('click', closeCalendarModal);
+    document.getElementById('closeTime').addEventListener('click', closeTimeModal);
+
+    // Close on overlay click
+    calendarModal.addEventListener('click', (e) => {
+      if (e.target === calendarModal) closeCalendarModal();
+    });
+
+    timeModal.addEventListener('click', (e) => {
+      if (e.target === timeModal) closeTimeModal();
+    });
+
+    // Calendar navigation
+    document.getElementById('prevMonth').addEventListener('click', () => {
+      currentMonth--;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      }
+      renderCalendar();
+    });
+
+    document.getElementById('nextMonth').addEventListener('click', () => {
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+      renderCalendar();
+    });
+
+    document.getElementById('todayBtn').addEventListener('click', () => {
+      const today = new Date();
+      tempSelectedDate = today;
+      currentMonth = today.getMonth();
+      currentYear = today.getFullYear();
+      renderCalendar();
+    });
+
+    document.getElementById('confirmDate').addEventListener('click', () => {
+      if (tempSelectedDate) {
+        selectedMeetingDate = tempSelectedDate;
+        meetingDateText.textContent = formatDateDisplay(selectedMeetingDate);
+        meetingDateDisplay.classList.add('has-value');
+      }
+      closeCalendarModal();
+      updateButtons(false);
+    });
+
+    document.getElementById('nowBtn').addEventListener('click', () => {
+      const now = new Date();
+      let hour = now.getHours();
+      const period = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12 || 12;
+      selectedMeetingTime = {
+        hour: hour,
+        minute: Math.floor(now.getMinutes() / 5) * 5,
+        period: period
+      };
+      renderTimePicker();
+    });
+
+    document.getElementById('confirmTime').addEventListener('click', () => {
+      meetingTimeText.textContent = formatTimeDisplay(selectedMeetingTime);
+      meetingTimeDisplay.classList.add('has-value');
+      closeTimeModal();
+      updateButtons(false);
+    });
+
+    // Set default date and time to today
+    const initializeDateTime = () => {
+      const now = new Date();
+      selectedMeetingDate = now;
+      meetingDateText.textContent = formatDateDisplay(selectedMeetingDate);
+      meetingDateDisplay.classList.add('has-value');
+
+      let hour = now.getHours();
+      const period = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12 || 12;
+      selectedMeetingTime = {
+        hour: hour,
+        minute: Math.floor(now.getMinutes() / 5) * 5,
+        period: period
+      };
+      meetingTimeText.textContent = formatTimeDisplay(selectedMeetingTime);
+      meetingTimeDisplay.classList.add('has-value');
+    };
+
+    initializeDateTime();
+
+    const setStatus = (el, msg, type = 'success') => {
+      el.textContent = msg;
+      el.className = `status ${type === 'error' ? 'error' : 'success'}`;
+      el.style.display = 'block';
+    };
+
+    const clearStatus = (el) => { el.style.display = 'none'; };
+
+    const updateButtons = (isActive) => {
+      startBtn.style.display = isActive ? 'none' : 'inline-block';
+      endBtn.style.display = isActive ? 'inline-block' : 'none';
+      startBtn.disabled = !(!isActive && titleInput.value.trim() && venueInput.value.trim() && selectedMeetingDate && selectedMeetingTime);
+    };
+
+    [titleInput, venueInput].forEach(inp => {
+      inp.addEventListener('input', () => updateButtons(false));
+    });
+
+    const loadActiveMeeting = async () => {
+      try {
+        const res = await fetch('/api/meeting/active');
+        const data = await res.json();
+        if (!data.active) {
+          activeMeetingInfo.textContent = 'No active meeting';
+          qrImg.src = '';
+          downloadQrLink.style.display = 'none';
+          updateButtons(false);
+          return null;
+        }
+        const m = data.meeting;
+        activeMeetingInfo.textContent = `Active: ${m.title} • ${m.venue} • ${m.time} • ${m.date}`;
+        const bust = Date.now();
+        qrImg.src = `/api/qr?v=${bust}`;
+        downloadQrLink.href = `/api/qr?download=1&v=${bust}`;
+        downloadQrLink.style.display = 'inline-block';
+        updateButtons(true);
+        return m;
+      } catch (err) {
+        setStatus(qrStatus, 'Could not load meeting/QR', 'error');
+        return null;
+      }
+    };
+
+    startBtn.addEventListener('click', async () => {
+      clearStatus(meetingStatus);
+
+      // Format the date and time for the payload
+      const dateStr = selectedMeetingDate ? selectedMeetingDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      }) : '';
+
+      const timeStr = formatTimeDisplay(selectedMeetingTime);
+
+      const payload = {
+        title: titleInput.value.trim(),
+        venue: venueInput.value.trim(),
+        time: timeStr,
+        date: dateStr
+      };
+
+      if (!payload.title || !payload.venue || !selectedMeetingDate || !selectedMeetingTime) {
+        setStatus(meetingStatus, 'Please fill meeting title, venue, date and time', 'error');
+        return;
+      }
+      const adminKey = adminKeyInput.value.trim();
+      try {
+        const res = await fetch('/api/meeting/start', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-key': adminKey
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Could not start meeting');
+        setStatus(meetingStatus, 'Meeting started. QR refreshed.', 'success');
+        await loadActiveMeeting();
+      } catch (err) {
+        setStatus(meetingStatus, err.message, 'error');
+      }
+    });
+
+    endBtn.addEventListener('click', async () => {
+      clearStatus(meetingStatus);
+      const adminKey = adminKeyInput.value.trim();
+      try {
+        const res = await fetch('/api/meeting/end', {
+          method: 'POST',
+          headers: { 'x-admin-key': adminKey }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Could not end meeting');
+        setStatus(meetingStatus, 'Meeting ended. QR expired.', 'success');
+        qrImg.src = '';
+        downloadQrLink.style.display = 'none';
+        activeMeetingInfo.textContent = 'No active meeting';
+        updateButtons(false);
+      } catch (err) {
+        setStatus(meetingStatus, err.message, 'error');
+      }
+    });
+
+    // Initial load
+    loadActiveMeeting();
+  </script>
+</body>
+
+</html>

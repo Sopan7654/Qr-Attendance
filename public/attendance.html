@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mark Attendance</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="card" style="max-width: 500px; margin: 40px auto;">
+      <div style="text-align: center; margin-bottom: 20px; padding: 12px; background: var(--panel); border-radius: 8px;">
+        <div style="font-size: 1.25rem; font-weight: 600; color: var(--accent);" id="currentDateTime"></div>
+        <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 4px;" id="currentDate"></div>
+      </div>
+      <div id="meetingInfo" class="status" style="display:none;"></div>
+      <h2>Attendance</h2>
+      <p class="muted">Enter your mobile number to mark attendance</p>
+      
+      <!-- Mobile Input Form -->
+      <div id="mobileForm">
+        <form id="checkMobileForm" class="grid" style="margin-top: 24px;">
+          <div class="field">
+            <label for="mobile">Mobile Number</label>
+            <input id="mobile" name="mobile" type="tel" placeholder="Enter your mobile number" required />
+          </div>
+          <div class="field">
+            <button type="submit">Continue</button>
+          </div>
+        </form>
+        <div id="mobileStatus" class="status" style="display:none;"></div>
+      </div>
+
+      <!-- Registration Form (shown if not registered) -->
+      <div id="registrationForm" style="display:none;">
+        <h3 style="margin-top: 0;">Registration Required</h3>
+        <p class="muted">Please complete your registration to mark attendance</p>
+        <form id="registerForm" class="grid" style="margin-top: 24px;">
+          <div class="field">
+            <label for="fullName">Full Name *</label>
+            <input id="fullName" name="fullName" required />
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" />
+          </div>
+          <div class="field">
+          <label for="department">Department / Office / Institution Name</label>
+            <input id="department" name="department" />
+          </div>
+          <div class="field">
+            <label for="employeeId">Employee / Student ID (optional)</label>
+            <input id="employeeId" name="employeeId" />
+          </div>
+          <div class="field">
+            <button type="submit">Register & Mark Attendance</button>
+          </div>
+        </form>
+        <div id="registerStatus" class="status" style="display:none;"></div>
+      </div>
+
+      <!-- Attendance Confirmation (shown if registered) -->
+      <div id="attendanceConfirm" style="display:none;">
+        <h3 style="margin-top: 0;">Confirm Attendance</h3>
+        <div id="participantDetails" style="margin: 20px 0; padding: 16px; background: var(--panel); border-radius: 8px;">
+          <p><strong>Name:</strong> <span id="confirmName"></span></p>
+          <p><strong>Mobile:</strong> <span id="confirmMobile"></span></p>
+          <p><strong>Email:</strong> <span id="confirmEmail"></span></p>
+          <p><strong>Department:</strong> <span id="confirmDepartment"></span></p>
+        </div>
+        <div class="field">
+          <button id="markAttendanceBtn">Mark Attendance</button>
+        </div>
+        <div id="attendanceStatus" class="status" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Real-time date and time display
+    const updateDateTime = () => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      
+      const dateTimeEl = document.getElementById('currentDateTime');
+      const dateEl = document.getElementById('currentDate');
+      
+      if (dateTimeEl) dateTimeEl.textContent = timeStr;
+      if (dateEl) dateEl.textContent = dateStr;
+    };
+
+    // Update date/time immediately and then every second
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
+    let currentParticipant = null;
+    let currentMeetingId = null;
+    const meetingInfo = document.getElementById('meetingInfo');
+    const mobileForm = document.getElementById('mobileForm');
+    const registrationForm = document.getElementById('registrationForm');
+    const attendanceConfirm = document.getElementById('attendanceConfirm');
+    const mobileStatus = document.getElementById('mobileStatus');
+    const registerStatus = document.getElementById('registerStatus');
+    const attendanceStatus = document.getElementById('attendanceStatus');
+
+    const getMeetingIdFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('meetingId');
+    };
+
+    const loadMeeting = async () => {
+      const meetingIdFromUrl = getMeetingIdFromUrl();
+      try {
+        let meeting = null;
+        // Always try active meeting endpoint
+        const res = await fetch('/api/meeting/active');
+        const data = await res.json();
+        if (data.active) {
+          if (!meetingIdFromUrl || data.meeting.id === meetingIdFromUrl) {
+            meeting = data.meeting;
+          }
+        }
+        if (!meeting) {
+          meetingInfo.style.display = 'block';
+          meetingInfo.className = 'status error';
+          meetingInfo.textContent = 'No active meeting. Please start a meeting.';
+          document.getElementById('checkMobileForm').querySelectorAll('input,button').forEach(el => el.disabled = true);
+          return null;
+        }
+        currentMeetingId = meeting.id;
+        // Re-enable form inputs if they were disabled
+        document.getElementById('checkMobileForm').querySelectorAll('input,button').forEach(el => el.disabled = false);
+        meetingInfo.style.display = 'block';
+        meetingInfo.className = 'status success';
+        meetingInfo.textContent = `Active meeting: ${meeting.title || ''} • ${meeting.venue || ''} • ${meeting.time || ''} • ${meeting.date || ''}`;
+        return meeting;
+      } catch (err) {
+        meetingInfo.style.display = 'block';
+        meetingInfo.className = 'status error';
+        meetingInfo.textContent = 'Could not load meeting info.';
+        return null;
+      }
+    };
+
+    // Check mobile number
+    document.getElementById('checkMobileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      mobileStatus.style.display = 'none';
+      const mobile = document.getElementById('mobile').value.trim();
+
+      try {
+        const res = await fetch('/api/check-registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mobile })
+        });
+        const data = await res.json();
+
+        if (data.registered) {
+          // Show attendance confirmation
+          currentParticipant = data.participant;
+          document.getElementById('confirmName').textContent = data.participant.fullName || '';
+          document.getElementById('confirmMobile').textContent = data.participant.mobile || '';
+          document.getElementById('confirmEmail').textContent = data.participant.email || 'N/A';
+          document.getElementById('confirmDepartment').textContent = data.participant.department || 'N/A';
+          
+          mobileForm.style.display = 'none';
+          registrationForm.style.display = 'none';
+          attendanceConfirm.style.display = 'block';
+        } else {
+          // Show registration form - store mobile in a variable for later use
+          window.pendingMobile = mobile;
+          
+          // Remove any existing hidden mobile input
+          const existingMobileInput = document.getElementById('registerForm').querySelector('input[name="mobile"]');
+          if (existingMobileInput) {
+            existingMobileInput.remove();
+          }
+          
+          // Add hidden mobile input
+          const mobileInput = document.createElement('input');
+          mobileInput.type = 'hidden';
+          mobileInput.name = 'mobile';
+          mobileInput.id = 'hiddenMobile';
+          mobileInput.value = mobile;
+          document.getElementById('registerForm').appendChild(mobileInput);
+          
+          mobileForm.style.display = 'none';
+          attendanceConfirm.style.display = 'none';
+          registrationForm.style.display = 'block';
+        }
+      } catch (err) {
+        mobileStatus.textContent = 'Error checking registration. Please try again.';
+        mobileStatus.className = 'status error';
+        mobileStatus.style.display = 'block';
+      }
+    });
+
+    // Register and mark attendance
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      registerStatus.style.display = 'none';
+      
+      // Ensure mobile is included
+      const formData = Object.fromEntries(new FormData(e.target).entries());
+      if (!formData.mobile && window.pendingMobile) {
+        formData.mobile = window.pendingMobile;
+      }
+      if (currentMeetingId) {
+        formData.meetingId = currentMeetingId;
+      }
+      
+      // Validate required fields
+      if (!formData.fullName || !formData.mobile) {
+        registerStatus.textContent = 'Full name and mobile number are required.';
+        registerStatus.className = 'status error';
+        registerStatus.style.display = 'block';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.message || data.error || 'Registration failed');
+        }
+
+        // After registration, mark attendance
+        const attendanceRes = await fetch('/api/attendance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participantId: data.id, meetingId: currentMeetingId })
+        });
+        const attendanceData = await attendanceRes.json();
+
+        if (!attendanceRes.ok) throw new Error(attendanceData.message || 'Could not mark attendance');
+
+        registerStatus.textContent = 'Registration successful! Attendance marked.';
+        registerStatus.className = 'status success';
+        registerStatus.style.display = 'block';
+        
+        setTimeout(() => {
+          location.reload();
+        }, 2000);
+      } catch (err) {
+        registerStatus.textContent = err.message;
+        registerStatus.className = 'status error';
+        registerStatus.style.display = 'block';
+      }
+    });
+
+    // Mark attendance for registered user
+    document.getElementById('markAttendanceBtn').addEventListener('click', async () => {
+      attendanceStatus.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/attendance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participantId: currentParticipant.id, meetingId: currentMeetingId })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.message || 'Could not mark attendance');
+
+        attendanceStatus.textContent = data.message;
+        attendanceStatus.className = 'status success';
+        attendanceStatus.style.display = 'block';
+        
+        setTimeout(() => {
+          location.reload();
+        }, 2000);
+      } catch (err) {
+        attendanceStatus.textContent = err.message;
+        attendanceStatus.className = 'status error';
+        attendanceStatus.style.display = 'block';
+      }
+    });
+
+    // Initial meeting load
+    loadMeeting();
+  </script>
+</body>
+</html>

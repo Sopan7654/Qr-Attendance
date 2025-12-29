@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+  <div class="container">
+    <div class="nav">
+      <a href="/">Home</a>
+    </div>
+
+    <!-- Login Section -->
+    <div id="loginSection" class="card" style="max-width: 400px; margin: 40px auto;">
+      <h2>Admin Login</h2>
+      <p class="muted">Enter the organizer password to access dashboard</p>
+      <form id="loginForm" class="grid" style="margin-top: 24px;">
+        <div class="field">
+          <label for="adminKey">Admin Password</label>
+          <input id="adminKey" name="adminKey" type="password" required />
+        </div>
+        <div class="field">
+          <button type="submit">Login</button>
+        </div>
+      </form>
+      <div id="loginStatus" class="status" style="display:none;"></div>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div id="dashboard" style="display:none;">
+      <div class="tabs">
+        <button class="tab active" data-tab="home">Home</button>
+        <button class="tab" data-tab="export">Export</button>
+      </div>
+
+      <!-- Home Tab -->
+      <div id="homeTab" class="tab-content active">
+        <div id="activeMeetingInfo" class="status"
+          style="display:none; margin-bottom: 12px; background: #e0f2fe; border-color: #93c5fd; color: #0f172a;"></div>
+        <div
+          style="margin-bottom: 24px; padding: 16px; background: var(--panel); border-radius: 8px; text-align: center;">
+          <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);" id="currentDateTime"></div>
+          <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 4px;" id="currentDate"></div>
+        </div>
+        <div class="hero">
+          <div>
+            <h2>QR Code</h2>
+            <p class="muted">Scan this QR code to mark attendance</p>
+            <div class="qr-box">
+              <img id="qrImage" alt="Attendance QR" style="max-width: 250px; width: 100%;" />
+            </div>
+            <div style="margin-top: 16px;">
+              <a href="/api/qr?download=1" download class="btn btn-secondary">Download QR</a>
+            </div>
+          </div>
+
+          <div>
+            <h2>Live Attendance</h2>
+            <div class="attendance-count" id="attendanceCount">0</div>
+            <p class="muted">Today's attendance</p>
+            <div class="attendance-list" id="attendanceList">
+              <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+                No attendance yet today
+              </div>
+            </div>
+            <button id="refreshBtn" style="margin-top: 16px;">Refresh</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export Tab -->
+      <div id="exportTab" class="tab-content">
+        <div class="card">
+          <h2>Export Attendance</h2>
+          <p class="muted">Download attendance data for a specific date and time</p>
+
+          <div class="date-picker">
+            <!-- Date Selection -->
+            <div class="field">
+              <label for="exportDateDisplay">Select Date</label>
+              <div class="custom-date-input" id="exportDateDisplay">
+                <span id="selectedDateText">Click to select date</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Time Selection -->
+            <div class="field">
+              <label for="exportTimeDisplay">Select Time</label>
+              <div class="custom-time-input" id="exportTimeDisplay">
+                <span id="selectedTimeText">Click to select time</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="exportMeetingId">Meeting ID (optional)</label>
+              <input id="exportMeetingId" type="text" placeholder="Active meeting ID (optional)" />
+            </div>
+            <div class="field">
+              <label>Format</label>
+              <div style="display:flex; gap:12px;">
+                <label><input type="radio" name="exportFormat" value="excel" checked /> Excel</label>
+                <label><input type="radio" name="exportFormat" value="pdf" /> PDF</label>
+              </div>
+            </div>
+            <div class="field">
+              <button id="exportBtn">Download Excel</button>
+            </div>
+          </div>
+
+          <div id="exportStatus" class="status" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Custom Calendar Modal -->
+      <div id="calendarModal" class="modal-overlay">
+        <div class="modal-content calendar-modal">
+          <div class="modal-header">
+            <h3>Select Date</h3>
+            <button class="close-btn" id="closeCalendar" aria-label="Close calendar">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="calendar-controls">
+            <button class="nav-btn" id="prevMonth">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <div class="month-year" id="monthYear"></div>
+            <button class="nav-btn" id="nextMonth">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+          <div class="modal-footer">
+            <button class="btn-secondary" id="todayBtn">Today</button>
+            <button class="btn-primary" id="confirmDate">Confirm</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Time Picker Modal -->
+      <div id="timeModal" class="modal-overlay">
+        <div class="modal-content time-modal">
+          <div class="modal-header">
+            <h3>Select Time</h3>
+            <button class="close-btn" id="closeTime" aria-label="Close time picker">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="time-picker">
+            <div class="time-column">
+              <label>Hour</label>
+              <div class="time-scroll" id="hourScroll"></div>
+            </div>
+            <div class="time-separator">:</div>
+            <div class="time-column">
+              <label>Minute</label>
+              <div class="time-scroll" id="minuteScroll"></div>
+            </div>
+            <div class="time-column">
+              <label>Period</label>
+              <div class="time-scroll" id="periodScroll"></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" id="nowBtn">Now</button>
+            <button class="btn-primary" id="confirmTime">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const loginSection = document.getElementById('loginSection');
+    const dashboard = document.getElementById('dashboard');
+    const loginStatus = document.getElementById('loginStatus');
+    const attendanceList = document.getElementById('attendanceList');
+    const attendanceCount = document.getElementById('attendanceCount');
+    const exportStatus = document.getElementById('exportStatus');
+    const activeMeetingInfo = document.getElementById('activeMeetingInfo');
+
+    const getKey = () => localStorage.getItem('adminKey') || '';
+
+    const setStatus = (el, message, type = 'success') => {
+      el.textContent = message;
+      el.className = `status ${type === 'error' ? 'error' : 'success'}`;
+      el.style.display = 'block';
+    };
+
+    const fetchJson = async (url) => {
+      const res = await fetch(url, {
+        headers: { 'x-admin-key': getKey() }
+      });
+      if (res.status === 401) {
+        // Clear bad key so user is prompted again
+        localStorage.removeItem('adminKey');
+        throw new Error('Unauthorized');
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Request failed');
+      }
+      return res.json();
+    };
+
+    const loadActiveMeeting = async () => {
+      try {
+        const res = await fetch('/api/meeting/active');
+        const data = await res.json();
+        if (data.active) {
+          const m = data.meeting;
+          activeMeetingInfo.style.display = 'block';
+          activeMeetingInfo.className = 'status success';
+          activeMeetingInfo.textContent = `Active meeting: ${m.title || ''} • ${m.venue || ''} • ${m.time || ''} • ${m.date || ''}`;
+        } else {
+          activeMeetingInfo.style.display = 'block';
+          activeMeetingInfo.className = 'status';
+          activeMeetingInfo.textContent = 'No active meeting.';
+        }
+      } catch (err) {
+        activeMeetingInfo.style.display = 'block';
+        activeMeetingInfo.className = 'status error';
+        activeMeetingInfo.textContent = 'Could not load active meeting.';
+      }
+    };
+
+    // Load live attendance
+    const formatTime = (ts) => {
+      if (!ts) return '';
+      const t = typeof ts === 'number' ? ts : Date.parse(ts);
+      if (!t) return '';
+      return new Date(t).toLocaleString();
+    };
+
+    const loadLiveAttendance = async (showErrors = true) => {
+      try {
+        const attendance = await fetchJson('/api/attendance/live');
+
+        attendanceCount.textContent = attendance.length;
+
+        if (attendance.length === 0) {
+          attendanceList.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-muted);">No attendance yet for the active meeting</div>';
+        } else {
+          const mTitle = attendance[0]?.meetingTitle || '';
+          const mVenue = attendance[0]?.meetingVenue || '';
+          const mTime = attendance[0]?.meetingTime || '';
+          const mDate = attendance[0]?.date || '';
+          activeMeetingInfo.style.display = 'block';
+          activeMeetingInfo.className = 'status success';
+          activeMeetingInfo.textContent = `Active meeting: ${mTitle} • ${mVenue} • ${mTime} • ${mDate}`;
+
+          const rows = attendance.map(a => `
+            <tr>
+              <td>${a.participantName || ''}</td>
+              <td>${a.participantMobile || ''}</td>
+              <td>${a.participantDepartment || ''}</td>
+              <td>${formatTime(a.timestamp)}</td>
+            </tr>
+          `).join('');
+
+          attendanceList.innerHTML = `
+            <div style="padding: 12px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+              <div style="font-weight:700; margin-bottom:8px;">${mTitle} • ${mVenue} • ${mTime} • ${mDate}</div>
+              <table style="width:100%; border-collapse: collapse;">
+                <thead style="background:#e2e8f0;">
+                  <tr>
+                    <th style="padding:10px; text-align:left;">Name</th>
+                    <th style="padding:10px; text-align:left;">Mobile</th>
+                    <th style="padding:10px; text-align:left;">Department / Office / Institution Name</th>
+                    <th style="padding:10px; text-align:left;">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+        return true;
+      } catch (err) {
+        console.error('Error loading attendance:', err);
+        if (showErrors) {
+          if (err.message === 'Unauthorized' || err.message.includes('Unauthorized')) {
+            // Only show login if we're sure it's unauthorized
+            attendanceList.innerHTML = '<div style="padding: 24px; color: var(--error);">Unauthorized. Please log in again.</div>';
+            attendanceCount.textContent = '0';
+            localStorage.removeItem('adminKey');
+            loginSection.style.display = 'block';
+            dashboard.style.display = 'none';
+          } else {
+            attendanceList.innerHTML = '<div style="padding: 24px; color: var(--error);">Could not load attendance. Please click Refresh to try again.</div>';
+            attendanceCount.textContent = '0';
+          }
+        }
+        throw err;
+      }
+    };
+
+    // Login
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginStatus.style.display = 'none';
+      const key = document.getElementById('adminKey').value.trim();
+
+      if (!key) {
+        setStatus(loginStatus, 'Please enter admin password', 'error');
+        return;
+      }
+
+      // Test the password first with a simple API call
+      try {
+        const testRes = await fetch('/api/attendance/live', {
+          headers: { 'x-admin-key': key }
+        });
+
+        if (!testRes.ok) {
+          if (testRes.status === 401) {
+            setStatus(loginStatus, 'Invalid admin password', 'error');
+            return;
+          }
+          throw new Error('Connection failed');
+        }
+
+        // Password is correct, save it and show dashboard
+        localStorage.setItem('adminKey', key);
+        loginSection.style.display = 'none';
+        dashboard.style.display = 'block';
+        setStatus(loginStatus, 'Login successful', 'success');
+
+        // Load attendance after successful login
+        loadLiveAttendance().catch(() => {
+          // If loading fails, don't log out - just show error in the list
+        });
+        loadActiveMeeting();
+      } catch (err) {
+        setStatus(loginStatus, err.message || 'Login failed. Please check your password.', 'error');
+      }
+    });
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+        tab.classList.add('active');
+        const tabName = tab.dataset.tab;
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+      });
+    });
+
+    // Refresh attendance
+    document.getElementById('refreshBtn').addEventListener('click', loadLiveAttendance);
+
+    // Custom Date-Time Picker Variables
+    let selectedDate = null;
+    let selectedTime = { hour: 12, minute: 0, period: 'AM' };
+    let currentMonth = new Date().getMonth();
+    let currentYear = new Date().getFullYear();
+    let tempSelectedDate = null;
+
+    // Modal Elements
+    const calendarModal = document.getElementById('calendarModal');
+    const timeModal = document.getElementById('timeModal');
+    const exportDateDisplay = document.getElementById('exportDateDisplay');
+    const exportTimeDisplay = document.getElementById('exportTimeDisplay');
+    const selectedDateText = document.getElementById('selectedDateText');
+    const selectedTimeText = document.getElementById('selectedTimeText');
+
+    // Calendar Functions
+    const formatDateDisplay = (date) => {
+      if (!date) return 'Click to select date';
+      const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+      return date.toLocaleDateString('en-US', options);
+    };
+
+    const formatTimeDisplay = (time) => {
+      const hour = String(time.hour).padStart(2, '0');
+      const minute = String(time.minute).padStart(2, '0');
+      return `${hour}:${minute} ${time.period}`;
+    };
+
+    const renderCalendar = () => {
+      const monthYear = document.getElementById('monthYear');
+      const calendarGrid = document.getElementById('calendarGrid');
+
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0);
+      const prevLastDay = new Date(currentYear, currentMonth, 0);
+
+      const firstDayIndex = firstDay.getDay();
+      const lastDate = lastDay.getDate();
+      const prevLastDate = prevLastDay.getDate();
+
+      monthYear.textContent = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      let days = '';
+
+      // Day headers
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      dayNames.forEach(day => {
+        days += `<div class="calendar-day-header">${day}</div>`;
+      });
+
+      // Previous month days
+      for (let x = firstDayIndex; x > 0; x--) {
+        days += `<div class="calendar-day prev-month">${prevLastDate - x + 1}</div>`;
+      }
+
+      // Current month days
+      const today = new Date();
+      for (let i = 1; i <= lastDate; i++) {
+        const date = new Date(currentYear, currentMonth, i);
+        const isToday = date.toDateString() === today.toDateString();
+        const isSelected = tempSelectedDate && date.toDateString() === tempSelectedDate.toDateString();
+
+        let classes = 'calendar-day';
+        if (isToday) classes += ' today';
+        if (isSelected) classes += ' selected';
+
+        days += `<div class="${classes}" data-date="${date.toISOString()}">${i}</div>`;
+      }
+
+      // Next month days
+      const totalCells = firstDayIndex + lastDate;
+      const remainingCells = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+      for (let j = 1; j <= remainingCells; j++) {
+        days += `<div class="calendar-day next-month">${j}</div>`;
+      }
+
+      calendarGrid.innerHTML = days;
+
+      // Add click handlers to current month days
+      document.querySelectorAll('.calendar-day:not(.prev-month):not(.next-month)').forEach(day => {
+        day.addEventListener('click', () => {
+          document.querySelectorAll('.calendar-day').forEach(d => d.classList.remove('selected'));
+          day.classList.add('selected');
+          tempSelectedDate = new Date(day.dataset.date);
+        });
+      });
+    };
+
+    const renderTimePicker = () => {
+      const hourScroll = document.getElementById('hourScroll');
+      const minuteScroll = document.getElementById('minuteScroll');
+      const periodScroll = document.getElementById('periodScroll');
+
+      // Hours (1-12)
+      let hoursHTML = '';
+      for (let i = 1; i <= 12; i++) {
+        const isSelected = i === selectedTime.hour;
+        hoursHTML += `<div class="time-option ${isSelected ? 'selected' : ''}" data-value="${i}">${String(i).padStart(2, '0')}</div>`;
+      }
+      hourScroll.innerHTML = hoursHTML;
+
+      // Minutes (0-59, step 5)
+      let minutesHTML = '';
+      for (let i = 0; i < 60; i += 5) {
+        const isSelected = i === selectedTime.minute;
+        minutesHTML += `<div class="time-option ${isSelected ? 'selected' : ''}" data-value="${i}">${String(i).padStart(2, '0')}</div>`;
+      }
+      minuteScroll.innerHTML = minutesHTML;
+
+      // Period (AM/PM)
+      periodScroll.innerHTML = `
+        <div class="time-option ${selectedTime.period === 'AM' ? 'selected' : ''}" data-value="AM">AM</div>
+        <div class="time-option ${selectedTime.period === 'PM' ? 'selected' : ''}" data-value="PM">PM</div>
+      `;
+
+      // Add click handlers
+      hourScroll.querySelectorAll('.time-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          hourScroll.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          selectedTime.hour = parseInt(opt.dataset.value);
+        });
+      });
+
+      minuteScroll.querySelectorAll('.time-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          minuteScroll.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          selectedTime.minute = parseInt(opt.dataset.value);
+        });
+      });
+
+      periodScroll.querySelectorAll('.time-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          periodScroll.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          selectedTime.period = opt.dataset.value;
+        });
+      });
+    };
+
+    // Open/Close Modals
+    exportDateDisplay.addEventListener('click', () => {
+      tempSelectedDate = selectedDate || new Date();
+      currentMonth = tempSelectedDate.getMonth();
+      currentYear = tempSelectedDate.getFullYear();
+      renderCalendar();
+      calendarModal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    });
+
+    exportTimeDisplay.addEventListener('click', () => {
+      renderTimePicker();
+      timeModal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    });
+
+    const closeCalendarModal = () => {
+      calendarModal.classList.remove('active');
+      document.body.style.overflow = '';
+    };
+
+    const closeTimeModal = () => {
+      timeModal.classList.remove('active');
+      document.body.style.overflow = '';
+    };
+
+    document.getElementById('closeCalendar').addEventListener('click', closeCalendarModal);
+    document.getElementById('closeTime').addEventListener('click', closeTimeModal);
+
+    // Close on overlay click
+    calendarModal.addEventListener('click', (e) => {
+      if (e.target === calendarModal) closeCalendarModal();
+    });
+
+    timeModal.addEventListener('click', (e) => {
+      if (e.target === timeModal) closeTimeModal();
+    });
+
+    // Calendar navigation
+    document.getElementById('prevMonth').addEventListener('click', () => {
+      currentMonth--;
+      if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+      }
+      renderCalendar();
+    });
+
+    document.getElementById('nextMonth').addEventListener('click', () => {
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
+      renderCalendar();
+    });
+
+    document.getElementById('todayBtn').addEventListener('click', () => {
+      const today = new Date();
+      tempSelectedDate = today;
+      currentMonth = today.getMonth();
+      currentYear = today.getFullYear();
+      renderCalendar();
+    });
+
+    document.getElementById('confirmDate').addEventListener('click', () => {
+      if (tempSelectedDate) {
+        selectedDate = tempSelectedDate;
+        selectedDateText.textContent = formatDateDisplay(selectedDate);
+        exportDateDisplay.classList.add('has-value');
+      }
+      closeCalendarModal();
+    });
+
+    document.getElementById('nowBtn').addEventListener('click', () => {
+      const now = new Date();
+      let hour = now.getHours();
+      const period = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12 || 12;
+      selectedTime = {
+        hour: hour,
+        minute: Math.floor(now.getMinutes() / 5) * 5,
+        period: period
+      };
+      renderTimePicker();
+    });
+
+    document.getElementById('confirmTime').addEventListener('click', () => {
+      selectedTimeText.textContent = formatTimeDisplay(selectedTime);
+      exportTimeDisplay.classList.add('has-value');
+      closeTimeModal();
+    });
+
+    // Set default date and time to today
+    const initializeDateTime = () => {
+      const now = new Date();
+      selectedDate = now;
+      selectedDateText.textContent = formatDateDisplay(selectedDate);
+      exportDateDisplay.classList.add('has-value');
+
+      let hour = now.getHours();
+      const period = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12 || 12;
+      selectedTime = {
+        hour: hour,
+        minute: Math.floor(now.getMinutes() / 5) * 5,
+        period: period
+      };
+      selectedTimeText.textContent = formatTimeDisplay(selectedTime);
+      exportTimeDisplay.classList.add('has-value');
+    };
+
+    initializeDateTime();
+
+    // Export attendance
+    document.getElementById('exportBtn').addEventListener('click', async () => {
+      if (!selectedDate) {
+        setStatus(exportStatus, 'Please select a date', 'error');
+        return;
+      }
+
+      const meetingId = document.getElementById('exportMeetingId').value.trim();
+      const format = document.querySelector('input[name="exportFormat"]:checked')?.value || 'excel';
+
+      // Format date as YYYY-MM-DD
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      try {
+        const params = new URLSearchParams();
+        if (meetingId) params.append('meetingId', meetingId);
+        if (format) params.append('format', format);
+        const res = await fetch(`/api/export/attendance/${dateStr}?${params.toString()}`, {
+          headers: { 'x-admin-key': getKey() }
+        });
+
+        if (!res.ok) throw new Error('Export failed');
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance-${dateStr}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        setStatus(exportStatus, `File downloaded successfully as ${format.toUpperCase()}`, 'success');
+      } catch (err) {
+        setStatus(exportStatus, err.message, 'error');
+      }
+    });
+
+    // Load QR code
+    document.getElementById('qrImage').src = '/api/qr';
+
+    // Real-time date and time display
+    const updateDateTime = () => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      const dateTimeEl = document.getElementById('currentDateTime');
+      const dateEl = document.getElementById('currentDate');
+
+      if (dateTimeEl) dateTimeEl.textContent = timeStr;
+      if (dateEl) dateEl.textContent = dateStr;
+    };
+
+    // Update date/time immediately and then every second
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
+    // Auto-refresh attendance every 5 seconds
+    setInterval(loadLiveAttendance, 5000);
+
+    // Auto-login if key exists
+    if (getKey()) {
+      // Test if the saved key still works
+      fetch('/api/attendance/live', {
+        headers: { 'x-admin-key': getKey() }
+      }).then(res => {
+        if (res.ok) {
+          loginSection.style.display = 'none';
+          dashboard.style.display = 'block';
+          loadLiveAttendance().catch(() => {
+            // If loading fails, stay logged in but show error
+          });
+          loadActiveMeeting();
+        } else {
+          // Key is invalid, remove it
+          localStorage.removeItem('adminKey');
+        }
+      }).catch(() => {
+        // Network error, but keep the key - might be temporary
+        loginSection.style.display = 'none';
+        dashboard.style.display = 'block';
+      });
+    }
+  </script>
+</body>
+
+</html>
