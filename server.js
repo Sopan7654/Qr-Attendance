@@ -529,9 +529,25 @@ app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
         return tsB - tsA; // Latest first
       });
 
-    // Map to Excel rows with all available details
+    // Map to Excel rows with essential details only
     const rows = filteredAttendance.map(data => {
       const ts = typeof data.timestamp === 'number' ? data.timestamp : (data.timestamp ? Date.parse(data.timestamp) : Date.now());
+      const attendanceDate = new Date(ts);
+
+      // Format attendance time as HH:MM AM/PM
+      const timeString = attendanceDate.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      // Clean meetingTime - extract only time portion (remove date if present)
+      let cleanMeetingTime = data.meetingTime || '';
+      // Remove date patterns like "30.12.2025" or "30/12/2025" or "2025-12-30"
+      cleanMeetingTime = cleanMeetingTime.replace(/\s*\d{1,2}[.\/\-]\d{1,2}[.\/\-]\d{2,4}\s*/g, '').trim();
+      // Convert am/pm to uppercase AM/PM
+      cleanMeetingTime = cleanMeetingTime.replace(/am/gi, 'AM').replace(/pm/gi, 'PM');
+
       return {
         fullName: data.participantName || '',
         email: data.participantEmail || '',
@@ -539,11 +555,9 @@ app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
         department: data.participantDepartment || '',
         meetingTitle: data.meetingTitle || '',
         meetingVenue: data.meetingVenue || '',
-        meetingTime: data.meetingTime || '',
-        meetingId: data.meetingId || '',
-        timestamp: new Date(ts).toLocaleString(),
-        date: data.date || date,
-        participantId: data.participantId || ''
+        meetingTime: cleanMeetingTime,
+        meetingDate: data.date || date,
+        attendanceTime: timeString
       };
     });
 
@@ -558,13 +572,13 @@ app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
         doc.moveDown(0.5).fontSize(12).text(`Meeting: ${rows[0].meetingTitle || ''}`);
         doc.text(`Venue: ${rows[0].meetingVenue || ''}`);
         doc.text(`Time: ${rows[0].meetingTime || ''}`);
-        doc.text(`Date: ${rows[0].date || ''}`);
+        doc.text(`Date: ${rows[0].meetingDate || ''}`);
       }
       doc.moveDown(0.5);
 
       // Simple table rendering
-      const colWidths = [120, 140, 80, 120, 140];
-      const headers = ['Name', 'Email', 'Mobile', 'Department / Office / Institution Name', 'Date/Time'];
+      const colWidths = [120, 140, 80, 120, 100];
+      const headers = ['Name', 'Email', 'Mobile', 'Department', 'Attendance Time'];
 
       // Header row
       doc.fontSize(10).font('Helvetica-Bold');
@@ -583,7 +597,7 @@ app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
           r.email || '',
           r.mobile || '',
           r.department || '',
-          `${r.date || ''} ${r.timestamp || ''}`
+          r.attendanceTime || ''
         ];
         cols.forEach((c, i) => {
           doc.text(c, { continued: i !== cols.length - 1, width: colWidths[i] });
@@ -604,10 +618,10 @@ app.get('/api/export/attendance/:date', requireAdmin, async (req, res) => {
         { header: 'Mobile', key: 'mobile', width: 15 },
         { header: 'Department', key: 'department', width: 20 },
         { header: 'Meeting Title', key: 'meetingTitle', width: 25 },
-        { header: 'Venue', key: 'meetingVenue', width: 20 },
-        { header: 'Time', key: 'meetingTime', width: 15 },
-        { header: 'Date', key: 'date', width: 15 },
-        { header: 'Attendance Time', key: 'timestamp', width: 25 }
+        { header: 'Venue', key: 'meetingVenue', width: 30 },
+        { header: 'Meeting Time', key: 'meetingTime', width: 20 },
+        { header: 'Meeting Date', key: 'meetingDate', width: 20 },
+        { header: 'Attendance Time', key: 'attendanceTime', width: 20 }
       ];
 
       // Style header row
